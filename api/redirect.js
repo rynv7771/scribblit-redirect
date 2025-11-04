@@ -85,29 +85,43 @@ export default async function handler(req, res) {
     const slug = (row.slug || "").replace(/^\//, "");
     if (!domain || !slug) return res.status(500).send("Bad mapping (domain/slug)");
 
-    // Build weighted keyword groups
-    const groups = Object.keys(row)
-      .filter(k => k.startsWith("group"))
-      .map(k => row[k])
-      .filter(Boolean);
+    // --- Keyword + Weighted Group Logic ---
+const groups = Object.keys(row)
+  .filter(k => k.startsWith("group"))
+  .map(k => row[k])
+  .filter(Boolean);
 
-    const weights = (row.weights || "")
-      .split(",")
-      .map(w => w.trim())
-      .filter(Boolean);
+const weights = (row.weights || "")
+  .split(",")
+  .map(w => w.trim())
+  .filter(Boolean);
 
-    const chosenGroup = pickWeightedGroup(groups, weights);
-    const pickedKeywords = pickRandomKeywords(chosenGroup, 3);
+// Pick which group wins
+const chosenGroup = pickWeightedGroup(groups, weights);
+const pickedKeywords = pickRandomKeywords(chosenGroup, 3);
 
-    const params = new URLSearchParams({
-      ...passthrough,
-      fbid: process.env.STATIC_FBID || "820262166096188",
-      fbclick: process.env.STATIC_FBCLICK || "Purchase",
-      segment: row.segment || "",
-      ...(pickedKeywords[0] ? { forceKeyA: pickedKeywords[0] } : {}),
-      ...(pickedKeywords[1] ? { forceKeyB: pickedKeywords[1] } : {}),
-      ...(pickedKeywords[2] ? { forceKeyC: pickedKeywords[2] } : {})
-    });
+// Determine which group number was picked
+const chosenIndex = groups.indexOf(chosenGroup) + 1;
+
+// Modify s1pcid to include the group suffix (e.g., 123456789_1)
+let s1pcidFinal = passthrough.s1pcid;
+if (s1pcidFinal) {
+  // Strip any existing suffix like _1/_2 just in case
+  s1pcidFinal = s1pcidFinal.replace(/_\d+$/, "");
+  s1pcidFinal = `${s1pcidFinal}_${chosenIndex}`;
+}
+
+// Build final params
+const params = new URLSearchParams({
+  ...passthrough,
+  s1pcid: s1pcidFinal,
+  fbid: process.env.STATIC_FBID || "820262166096188",
+  fbclick: process.env.STATIC_FBCLICK || "Purchase",
+  segment: row.segment || "",
+  ...(pickedKeywords[0] ? { forceKeyA: pickedKeywords[0] } : {}),
+  ...(pickedKeywords[1] ? { forceKeyB: pickedKeywords[1] } : {}),
+  ...(pickedKeywords[2] ? { forceKeyC: pickedKeywords[2] } : {})
+});
 
     const finalUrl = `https://${domain}/${slug}/?${params.toString()}`;
     res.setHeader("Cache-Control", "no-store");
