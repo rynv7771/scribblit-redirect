@@ -1,0 +1,8 @@
+{
+  "name": "scribblit-redirect",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "googleapis": "^121.0.0"
+  }
+}
