@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/redirect.js": {
-      "runtime": "nodejs18.x@latest",
+      "runtime": "vercel-nodejs@20.0.0",
       "memory": 128,
       "maxDuration": 5
     }
