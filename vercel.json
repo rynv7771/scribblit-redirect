@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/redirect.js": {
-      "runtime": "nodejs18.x",
+      "runtime": "nodejs18.x@latest",
       "memory": 128,
       "maxDuration": 5
     }
