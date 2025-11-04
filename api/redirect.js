@@ -1,11 +1,8 @@
-// Serverless redirect handler with Google Sheets mapping + simple cache
-const { google } = require("googleapis");
+import { google } from "googleapis";
 
-// 10-min in-memory cache to avoid Sheets rate limits
 let CACHE = { rows: null, fetchedAt: 0 };
 const TTL_MS = parseInt(process.env.CACHE_TTL_MS || "600000", 10);
 
-// Optional: quick fallback mapping for first-run testing (remove later)
 const FALLBACK = [
   // { redirect_id: "101", domain: "adepty.co", article_slug: "home-garden/your-article", forceKeys: "example keyword 1|example keyword 2", active: "TRUE" }
 ];
@@ -20,7 +17,6 @@ async function fetchRowsFromSheets() {
   const range = process.env.SHEET_RANGE || "Mappings!A:F";
 
   if (!email || !key || !sheetId) {
-    // No env set yet — allow fallback rows so you can deploy
     CACHE = { rows: FALLBACK, fetchedAt: now };
     return FALLBACK;
   }
@@ -50,7 +46,7 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     const { rid, ...passthrough } = req.query || {};
     if (!rid) return res.status(400).send("Missing rid");
@@ -74,7 +70,6 @@ module.exports = async (req, res) => {
       .filter(Boolean);
     const keyword = keys.length ? pick(keys) : "";
 
-    // Build final URL: preserve all incoming params, set s1particle & forceKeyA
     const params = new URLSearchParams({
       ...passthrough,
       s1particle: slug,
@@ -88,4 +83,4 @@ module.exports = async (req, res) => {
     console.error(err);
     res.status(500).send("Redirect error");
   }
-};
+}
