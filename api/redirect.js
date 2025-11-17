@@ -56,7 +56,9 @@ function pickRandomKeywords(groupString, count = 3) {
     .split("|")
     .map(k => k.trim())
     .filter(Boolean);
+
   if (keywords.length === 0) return [];
+
   const shuffled = keywords.sort(() => 0.5 - Math.random());
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }
@@ -64,8 +66,29 @@ function pickRandomKeywords(groupString, count = 3) {
 export default async function handler(req, res) {
   try {
     const { rid, ...passthrough } = req.query || {};
-    if (!rid) return res.status(400).send("Missing rid");
 
+    // ---------------------------------------------------------------------
+    // MODE B — NO RID → SIMPLE DIRECT REDIRECT (your Adepty use case)
+    // ---------------------------------------------------------------------
+    if (!rid) {
+      const domain = (passthrough.domain || "").replace(/^https?:\/\//, "");
+      const slug = (passthrough.slug || "").replace(/^\//, "");
+
+      if (!domain || !slug) {
+        return res.status(400).send("Missing domain/slug for non-rid redirect");
+      }
+
+      // Build params exactly as sent
+      const params = new URLSearchParams(passthrough);
+
+      const finalUrl = `https://${domain}/${slug}/?${params.toString()}`;
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(302, finalUrl);
+    }
+
+    // ---------------------------------------------------------------------
+    // MODE A — RID PRESENT → FULL ROTATION MODE
+    // ---------------------------------------------------------------------
     const rows = await fetchRowsFromSheets();
     const row = rows.find(
       r =>
@@ -75,58 +98,52 @@ export default async function handler(req, res) {
 
     if (!row) {
       const fallback = rows.find(r => r.fallback_url);
-      if (fallback?.fallback_url) {
-        return res.redirect(302, fallback.fallback_url);
-      }
+      if (fallback?.fallback_url) return res.redirect(302, fallback.fallback_url);
       return res.status(404).send("Unknown or inactive rid");
     }
 
     const domain = (row.domain || "").replace(/^https?:\/\//, "");
     const slug = (row.slug || "").replace(/^\//, "");
+
     if (!domain || !slug) return res.status(500).send("Bad mapping (domain/slug)");
 
-    // --- Keyword + Weighted Group Logic ---
-const groups = Object.keys(row)
-  .filter(k => k.startsWith("group"))
-  .map(k => row[k])
-  .filter(Boolean);
+    const groups = Object.keys(row)
+      .filter(k => k.startsWith("group"))
+      .map(k => row[k])
+      .filter(Boolean);
 
-const weights = (row.weights || "")
-  .split(",")
-  .map(w => w.trim())
-  .filter(Boolean);
+    const weights = (row.weights || "")
+      .split(",")
+      .map(w => w.trim())
+      .filter(Boolean);
 
-// Pick which group wins
-const chosenGroup = pickWeightedGroup(groups, weights);
-const pickedKeywords = pickRandomKeywords(chosenGroup, 3);
+    const chosenGroup = pickWeightedGroup(groups, weights);
+    const pickedKeywords = pickRandomKeywords(chosenGroup, 3);
+    const chosenIndex = groups.indexOf(chosenGroup) + 1;
 
-// Determine which group number was picked
-const chosenIndex = groups.indexOf(chosenGroup) + 1;
+    // Modify s1pcid (add suffix)
+    let s1pcidFinal = passthrough.s1pcid;
+    if (s1pcidFinal) {
+      s1pcidFinal = s1pcidFinal.replace(/_\d+$/, "");
+      s1pcidFinal = `${s1pcidFinal}_${chosenIndex}`;
+    }
 
-// Modify s1pcid to include the group suffix (e.g., 123456789_1)
-let s1pcidFinal = passthrough.s1pcid;
-if (s1pcidFinal) {
-  // Strip any existing suffix like _1/_2 just in case
-  s1pcidFinal = s1pcidFinal.replace(/_\d+$/, "");
-  s1pcidFinal = `${s1pcidFinal}_${chosenIndex}`;
-}
-
-// Build final params
-const params = new URLSearchParams({
-  ...passthrough,
-  s1pcid: s1pcidFinal,
-  fbid: process.env.STATIC_FBID || "820262166096188",
-  fbclick: process.env.STATIC_FBCLICK || "Purchase",
-  segment: row.segment || "",
-  ...(pickedKeywords[0] ? { forceKeyA: pickedKeywords[0] } : {}),
-  ...(pickedKeywords[1] ? { forceKeyB: pickedKeywords[1] } : {}),
-  ...(pickedKeywords[2] ? { forceKeyC: pickedKeywords[2] } : {})
-});
+    const params = new URLSearchParams({
+      ...passthrough,
+      s1pcid: s1pcidFinal,
+      segment: row.segment || "",
+      fbid: process.env.STATIC_FBID || "820262166096188",
+      fbclick: process.env.STATIC_FBCLICK || "Purchase",
+      ...(pickedKeywords[0] ? { forceKeyA: pickedKeywords[0] } : {}),
+      ...(pickedKeywords[1] ? { forceKeyB: pickedKeywords[1] } : {}),
+      ...(pickedKeywords[2] ? { forceKeyC: pickedKeywords[2] } : {})
+    });
 
     const finalUrl = `https://${domain}/${slug}/?${params.toString()}`;
     res.setHeader("Cache-Control", "no-store");
     res.writeHead(302, { Location: finalUrl });
     res.end();
+
   } catch (err) {
     console.error("Redirect error:", err);
     res.status(500).send("Redirect error");
