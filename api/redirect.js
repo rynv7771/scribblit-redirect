@@ -31,14 +31,15 @@ export default async function handler(req, res) {
     // Determine mode: "aff" = passthrough only, "s1" (default) = append fbid/fbclick
     const mode = params.mode || "s1";
 
-    // In aff mode without fbclid, redirect to search page
+    // In aff mode without fbclid/ttclid, redirect to search page with nosignup
     if (mode === "aff" && !params.fbclid && !params.ttclid) {
-      const fallbackUrl = `https://ask-finn.com/?q=${encodeURIComponent(slug)}`;
+      const querySlug = slug.replace(/^lp\//, "");
+      const fallbackUrl = `https://ask-finn.com/?q=${encodeURIComponent(querySlug)}&nosignup=true`;
 
       console.log("Redirect (aff fallback):", {
         from: req.url,
         to: fallbackUrl,
-        reason: "aff mode, no fbclid"
+        reason: "aff mode, no fbclid/ttclid"
       });
 
       res.setHeader("Cache-Control", "no-store");
