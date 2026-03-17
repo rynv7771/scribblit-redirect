@@ -31,21 +31,6 @@ export default async function handler(req, res) {
     // Determine mode: "aff" = passthrough only, "s1" (default) = append fbid/fbclick
     const mode = params.mode || "s1";
 
-    // In aff mode without fbclid/ttclid, redirect to search page with nosignup
-    if (mode === "aff" && !params.fbclid && !params.ttclid) {
-      const lpSlug = slug.replace(/^lp\//, "");
-      const fallbackUrl = `https://ask-finn.com/lp/${encodeURIComponent(lpSlug)}?nosignup=true`;
-
-      console.log("Redirect (aff fallback):", {
-        from: req.url,
-        to: fallbackUrl,
-        reason: "aff mode, no fbclid/ttclid"
-      });
-
-      res.setHeader("Cache-Control", "no-store");
-      return res.redirect(302, fallbackUrl);
-    }
-
     // Build new URLSearchParams with ALL params except control params
     const finalParams = new URLSearchParams();
     const skipKeys = new Set(["domain", "d", "slug", "mode"]);
