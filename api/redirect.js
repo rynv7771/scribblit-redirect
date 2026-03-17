@@ -33,8 +33,8 @@ export default async function handler(req, res) {
 
     // In aff mode without fbclid/ttclid, redirect to search page with nosignup
     if (mode === "aff" && !params.fbclid && !params.ttclid) {
-      const querySlug = slug.replace(/^lp\//, "");
-      const fallbackUrl = `https://ask-finn.com/?q=${encodeURIComponent(querySlug)}&nosignup=true`;
+      const lpSlug = slug.replace(/^lp\//, "");
+      const fallbackUrl = `https://ask-finn.com/lp/${encodeURIComponent(lpSlug)}?nosignup=true`;
 
       console.log("Redirect (aff fallback):", {
         from: req.url,
